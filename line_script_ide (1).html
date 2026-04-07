@@ -61,39 +61,106 @@ opacity:0.5;
 <div id="topbar">
 <button onclick="runCode()">><>< Run</button>
 <button onclick="clearAll()"><< Clear</button>
-<button onclick="beauty()">><>< Format</button>
 </div>
 <div id="layout">
-<textarea id="editor" spellcheck="false">>>>. >>>.. >>>...</textarea>
+<textarea id="editor" spellcheck="false">
+>>>-=> >>>>.. 
+[ >>>-+ >>>... ]
+</textarea>
 <iframe id="output"></iframe>
 </div>
 <div id="status"><<<>>< status: ready ></div>
 <script>
+function decodeNumber(token){
+  let count = (token.match(/>/g) || []).length;
+  let dots = (token.match(/\./g) || []).length;
+  if(dots === 3) return count % 10;
+  if(dots === 1) return ((count - 1) % 26) + 97;
+  if(dots === 2) return ((count - 1) % 26) + 65;
+  return 0;
+}
+
 function runCode(){
   const code = document.getElementById('editor').value.trim();
   const tokens = code.split(/\s+/);
 
+  let memory = new Array(100).fill(0);
+  let currentVar = 0;
   let output = "";
 
-  tokens.forEach(token => {
-    let count = (token.match(/>/g) || []).length;
-    let dots = (token.match(/\./g) || []).length;
+  let i = 0;
 
-    if (dots === 1){ // lowercase letter
-      if (count === 0) { output += " "; return; }
-      let charCode = ((count - 1) % 26) + 97;
-      output += String.fromCharCode(charCode);
+  while(i < tokens.length){
+    let token = tokens[i];
+
+    // Loop start
+    if(token === '['){
+      let loopStart = i + 1;
+      let depth = 1;
+      let j = loopStart;
+
+      while(j < tokens.length && depth > 0){
+        if(tokens[j] === '[') depth++;
+        if(tokens[j] === ']') depth--;
+        j++;
+      }
+
+      let loopEnd = j - 1;
+
+      while(memory[currentVar] > 0){
+        for(let k = loopStart; k < loopEnd; k++){
+          processToken(tokens[k]);
+        }
+      }
+
+      i = loopEnd;
     }
-    else if (dots === 2){ // uppercase
-      if (count === 0) { output += " "; return; }
-      let charCode = ((count - 1) % 26) + 65;
-      output += String.fromCharCode(charCode);
+    else if(token === ']'){
+      // handled in [
     }
-    else if (dots === 3){ // number
-      let digit = count % 10;
-      output += digit.toString();
+    else{
+      processToken(token);
     }
-  });
+
+    i++;
+  }
+
+  function processToken(token){
+    if(token.includes('-')){
+      let varIndex = (token.match(/>/g) || []).length;
+      currentVar = varIndex;
+      return;
+    }
+
+    if(token.includes('+') || token.includes('-') || token.includes('*') || token.includes('/')){
+      let op = token[token.length-1];
+      let nextToken = tokens[tokens.indexOf(token)+1] || "";
+      let value = decodeNumber(nextToken);
+
+      if(op === '+') memory[currentVar] += value;
+      if(op === '-') memory[currentVar] -= value;
+      if(op === '*') memory[currentVar] *= value;
+      if(op === '/') memory[currentVar] = Math.floor(memory[currentVar] / (value || 1));
+      if(op === '=') memory[currentVar] = value;
+      return;
+    }
+
+    // output decoding
+    if(/^[>.]+$/.test(token)){
+      let count = (token.match(/>/g) || []).length;
+      let dots = (token.match(/\./g) || []).length;
+
+      if(dots === 1){
+        output += String.fromCharCode(((count - 1) % 26) + 97);
+      }
+      else if(dots === 2){
+        output += String.fromCharCode(((count - 1) % 26) + 65);
+      }
+      else if(dots === 3){
+        output += (count % 10).toString();
+      }
+    }
+  }
 
   document.getElementById('output').srcdoc = "<pre>" + output + "</pre>";
   document.getElementById('status').innerText = '<<<> executed >>';
@@ -103,14 +170,6 @@ function clearAll(){
   document.getElementById('editor').value = '';
   document.getElementById('output').srcdoc = '';
   document.getElementById('status').innerText = '<< cleared >>';
-}
-
-function beauty(){
-  let t = document.getElementById('editor');
-  let lines = t.value.split('\n');
-  let spaced = lines.map(l => l.trim()).join('\n');
-  t.value = spaced;
-  document.getElementById('status').innerText = '<< formatted >>';
 }
 </script>
 </body>
