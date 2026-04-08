@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Custom Language Editor</title>
+  <title>Custom Language Editor (Real Parser)</title>
   <style>
     body { margin: 0; font-family: monospace; background: #1e1e1e; color: #fff; }
     #container { display: flex; flex-direction: column; height: 100vh; }
@@ -22,7 +22,6 @@
   <pre id="output"></pre>
 </div>
 
-<!-- Monaco Editor Loader -->
 <script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
 <script>
 let editor;
@@ -35,88 +34,148 @@ require(['vs/editor/editor.main'], function () {
     theme: 'vs-dark',
     automaticLayout: true
   });
-
-  // Simple validation for squiggly errors
-  editor.onDidChangeModelContent(validate);
 });
 
+// ===== REAL PARSER =====
+
 function tokenize(input) {
-  return input.split(/\s+/).filter(t => t.length > 0);
-}
+  let tokens = [];
+  let i = 0;
 
-function countArrows(token) {
-  let count = 0;
-  for (let c of token) {
-    if (c === '>') count++;
-    else break;
-  }
-  return count;
-}
+  while (i < input.length) {
+    if (input[i] === '>') {
+      let start = i;
+      while (i < input.length && input[i] === '>') i++;
+      let arrows = input.slice(start, i);
 
-function validate() {
-  const value = editor.getValue();
-  const tokens = tokenize(value);
-  let markers = [];
+      let rest = '';
+      while (i < input.length && input[i] !== ' ' && input[i] !== '\n') {
+        rest += input[i++];
+      }
 
-  tokens.forEach((token, index) => {
-    if (!token.startsWith('>') && token.length > 0) {
-      markers.push({
-        startLineNumber: 1,
-        startColumn: 1,
-        endLineNumber: 1,
-        endColumn: 2,
-        message: 'Invalid token',
-        severity: monaco.MarkerSeverity.Error
-      });
+      tokens.push(arrows + rest);
+    } else if (input[i] === '[') {
+      let start = i;
+      let depth = 1;
+      i++;
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        if (input[i] === ']') depth--;
+        i++;
+      }
+      tokens.push(input.slice(start, i));
+    } else {
+      i++;
     }
-  });
+  }
 
-  monaco.editor.setModelMarkers(editor.getModel(), 'owner', markers);
+  return tokens;
 }
 
-function parsePrint(symbols) {
-  if (symbols === ".") return "a";
-  if (symbols === "..") return "A";
-  if (symbols === "...") return "1";
-  if (symbols === "....") return "@";
-  return "?";
+function countArrows(str) {
+  let i = 0;
+  while (i < str.length && str[i] === '>') i++;
+  return i;
+}
+
+function parseBlock(block) {
+  let statements = [];
+  let tokens = tokenize(block);
+
+  for (let token of tokens) {
+    statements.push(parseStatement(token));
+  }
+
+  return statements;
+}
+
+function parseStatement(token) {
+  // Loop
+  if (token.includes('[')) {
+    let arrows = countArrows(token);
+    let inner = token.slice(token.indexOf('[') + 1, token.lastIndexOf(']'));
+    return {
+      type: 'loop',
+      count: arrows,
+      body: parseBlock(inner)
+    };
+  }
+
+  // Variable assignment
+  if (token.includes('-=>')) {
+    let [left, right] = token.split('-=>');
+    return {
+      type: 'assign',
+      varIndex: countArrows(left),
+      valueToken: right
+    };
+  }
+
+  // Variable print
+  if (token.includes('->')) {
+    return {
+      type: 'varPrint',
+      varIndex: countArrows(token.split('->')[0])
+    };
+  }
+
+  // Print
+  if (token.startsWith('>')) {
+    return {
+      type: 'print',
+      dots: token.slice(1)
+    };
+  }
+
+  return { type: 'noop' };
+}
+
+function execute(ast, variables, outputObj) {
+
+  function parseValue(token) {
+    if (token.includes('.')) return token.length;
+    return parseInt(token) || 0;
+  }
+
+  for (let node of ast) {
+
+    if (node.type === 'print') {
+      let d = node.dots;
+      if (d === '.') outputObj.value += 'a';
+      else if (d === '..') outputObj.value += 'A';
+      else if (d === '...') outputObj.value += '1';
+      else if (d === '....') outputObj.value += '@';
+      else outputObj.value += '?';
+    }
+
+    else if (node.type === 'assign') {
+      variables[node.varIndex] = parseValue(node.valueToken);
+    }
+
+    else if (node.type === 'varPrint') {
+      outputObj.value += (variables[node.varIndex] || 0);
+    }
+
+    else if (node.type === 'loop') {
+      for (let i = 0; i < node.count; i++) {
+        execute(node.body, variables, outputObj);
+      }
+    }
+  }
 }
 
 function runCode() {
   const input = editor.getValue();
-  const tokens = tokenize(input);
 
+  let ast = parseBlock(input);
   let variables = {};
-  let output = "";
+  let outputObj = { value: '' };
 
-  function getVar(i) {
-    return variables[i] || 0;
-  }
+  execute(ast, variables, outputObj);
 
-  function setVar(i, v) {
-    variables[i] = v;
-  }
-
-  for (let token of tokens) {
-    if (token.includes("-=>")) {
-      let parts = token.split("-=>");
-      let arrows = countArrows(parts[0]);
-      let valueToken = parts[1];
-      let value = valueToken.includes(".") ? valueToken.length : parseInt(valueToken) || 0;
-      setVar(arrows, value);
-    }
-    else if (token.includes("->") && !token.includes("-=>")) {
-      let arrows = countArrows(token.split("->")[0]);
-      output += getVar(arrows);
-    }
-    else if (token.startsWith(">")) {
-      let dots = token.slice(1);
-      output += parsePrint(dots);
-    }
-  }
-
-  document.getElementById("output").textContent = output;
+  document.getElementById('output').textContent = outputObj.value;
 }
+
 </script>
 
 </body>
