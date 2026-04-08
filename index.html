@@ -1,211 +1,122 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Custom Editor</title>
-<style>
-html, body {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-  background: #1e1e1e;
-  color: white;
-  font-family: monospace;
-}
-
-.editor-wrapper {
-  display: flex;
-  height: 100%;
-}
-
-.gutter {
-  width: 50px;
-  padding: 10px 5px;
-  text-align: right;
-  background: #252526;
-  color: #666;
-  user-select: none;
-}
-
-.editor {
-  position: relative;
-  flex: 1;
-}
-
-textarea, .highlight {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  padding: 10px;
-  font-size: 14px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  border: none;
-  outline: none;
-  box-sizing: border-box;
-}
-
-textarea {
-  background: transparent;
-  color: transparent;
-  caret-color: white;
-  z-index: 2;
-  resize: none;
-}
-
-.highlight {
-  color: #d4d4d4;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.keyword { color: #4fc1ff; font-weight: bold; }
-.arrow { color: #c586c0; font-weight: bold; }
-.error {
-  text-decoration: underline;
-  text-decoration-style: wavy;
-  text-decoration-color: red;
-}
-
-#cursor {
-  position: absolute;
-  width: 2px;
-  height: 18px;
-  background: white;
-  animation: blink 1s step-end infinite;
-  pointer-events: none;
-  z-index: 3;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-</style>
+  <meta charset="UTF-8" />
+  <title>Custom Language Editor</title>
+  <style>
+    body { margin: 0; font-family: monospace; background: #1e1e1e; color: #fff; }
+    #container { display: flex; flex-direction: column; height: 100vh; }
+    #editor { height: 60%; }
+    #controls { padding: 10px; background: #111; }
+    button { padding: 8px 12px; margin-right: 10px; }
+    #output { height: 40%; background: #000; color: #0f0; padding: 10px; overflow: auto; white-space: pre-wrap; }
+  </style>
 </head>
 <body>
 
-<div class="editor-wrapper">
-  <div class="gutter" id="gutter"></div>
-  <div class="editor">
-    <div id="highlight" class="highlight"></div>
-    <div id="cursor"></div>
-    <textarea id="editor" spellcheck="false"></textarea>
+<div id="container">
+  <div id="editor"></div>
+  <div id="controls">
+    <button onclick="runCode()">Run</button>
   </div>
+  <pre id="output"></pre>
 </div>
 
+<!-- Monaco Editor Loader -->
+<script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
 <script>
-const editor = document.getElementById("editor");
-const highlight = document.getElementById("highlight");
-const gutter = document.getElementById("gutter");
-const cursor = document.getElementById("cursor");
+let editor;
 
-// ---------------- TOKENIZER ----------------
-function tokenize(code) {
-  const tokens = [];
-  let current = "";
-
-  const pushToken = (type, value) => {
-    if (value) tokens.push({ type, value });
-  };
-
-  const isOperator = (str) => /^(>-=|>->|>>>\.\.\.)$/.test(str);
-
-  const words = code.split(/(\s+)/);
-
-  words.forEach(word => {
-    if (word.trim() === "") {
-      tokens.push({ type: "space", value: word });
-    } else if (isOperator(word)) {
-      tokens.push({ type: "keyword", value: word });
-    } else if (word === "[" || word === "]") {
-      tokens.push({ type: "arrow", value: word });
-    } else if (/^[a-zA-Z0-9_]+$/.test(word)) {
-      tokens.push({ type: "identifier", value: word });
-    } else {
-      tokens.push({ type: "error", value: word });
-    }
+require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.44.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+  editor = monaco.editor.create(document.getElementById('editor'), {
+    value: "",
+    language: 'plaintext',
+    theme: 'vs-dark',
+    automaticLayout: true
   });
 
-  return tokens;
-}
-
-// ---------------- HIGHLIGHT ----------------
-function highlightCode(code) {
-  const tokens = tokenize(code);
-  let html = "";
-
-  tokens.forEach(t => {
-    if (t.type === "space") {
-      html += t.value;
-    } else if (t.type === "keyword") {
-      html += `<span class="keyword">${t.value}</span>`;
-    } else if (t.type === "arrow") {
-      html += `<span class="arrow">${t.value}</span>`;
-    } else if (t.type === "error") {
-      html += `<span class="error">${t.value}</span>`;
-    } else {
-      html += t.value;
-    }
-  });
-
-  return html;
-}
-
-// ---------------- LINE NUMBERS ----------------
-function updateLineNumbers(textarea, gutter) {
-  const lines = textarea.value.split("\n");
-  let html = "";
-  let count = 1;
-
-  lines.forEach(line => {
-    const wrapped = Math.max(1, Math.ceil(line.length / 80));
-    for (let i = 0; i < wrapped; i++) {
-      html += count + "<br>";
-      count++;
-    }
-  });
-
-  gutter.innerHTML = html;
-}
-
-// ---------------- CURSOR POSITION ----------------
-function updateCursor() {
-  const style = getComputedStyle(editor);
-  const lineHeight = parseFloat(style.lineHeight);
-  const charWidth = 8;
-
-  const pos = editor.selectionStart;
-  const textBefore = editor.value.substring(0, pos);
-  const lines = textBefore.split("\n");
-
-  const top = (lines.length - 1) * lineHeight;
-  const left = lines[lines.length - 1].length * charWidth;
-
-  cursor.style.top = top + "px";
-  cursor.style.left = left + "px";
-}
-
-// ---------------- UPDATE ----------------
-function update() {
-  highlight.innerHTML = highlightCode(editor.value);
-  updateLineNumbers(editor, gutter);
-  updateCursor();
-}
-
-editor.addEventListener("input", update);
-editor.addEventListener("scroll", () => {
-  highlight.scrollTop = editor.scrollTop;
-  gutter.scrollTop = editor.scrollTop;
+  // Simple validation for squiggly errors
+  editor.onDidChangeModelContent(validate);
 });
-editor.addEventListener("keyup", updateCursor);
-editor.addEventListener("click", updateCursor);
 
-update();
+function tokenize(input) {
+  return input.split(/\s+/).filter(t => t.length > 0);
+}
+
+function countArrows(token) {
+  let count = 0;
+  for (let c of token) {
+    if (c === '>') count++;
+    else break;
+  }
+  return count;
+}
+
+function validate() {
+  const value = editor.getValue();
+  const tokens = tokenize(value);
+  let markers = [];
+
+  tokens.forEach((token, index) => {
+    if (!token.startsWith('>') && token.length > 0) {
+      markers.push({
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 2,
+        message: 'Invalid token',
+        severity: monaco.MarkerSeverity.Error
+      });
+    }
+  });
+
+  monaco.editor.setModelMarkers(editor.getModel(), 'owner', markers);
+}
+
+function parsePrint(symbols) {
+  if (symbols === ".") return "a";
+  if (symbols === "..") return "A";
+  if (symbols === "...") return "1";
+  if (symbols === "....") return "@";
+  return "?";
+}
+
+function runCode() {
+  const input = editor.getValue();
+  const tokens = tokenize(input);
+
+  let variables = {};
+  let output = "";
+
+  function getVar(i) {
+    return variables[i] || 0;
+  }
+
+  function setVar(i, v) {
+    variables[i] = v;
+  }
+
+  for (let token of tokens) {
+    if (token.includes("-=>")) {
+      let parts = token.split("-=>");
+      let arrows = countArrows(parts[0]);
+      let valueToken = parts[1];
+      let value = valueToken.includes(".") ? valueToken.length : parseInt(valueToken) || 0;
+      setVar(arrows, value);
+    }
+    else if (token.includes("->") && !token.includes("-=>")) {
+      let arrows = countArrows(token.split("->")[0]);
+      output += getVar(arrows);
+    }
+    else if (token.startsWith(">")) {
+      let dots = token.slice(1);
+      output += parsePrint(dots);
+    }
+  }
+
+  document.getElementById("output").textContent = output;
+}
 </script>
 
 </body>
