@@ -2,91 +2,39 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Custom Language IDE</title>
-
+<title>Custom Language IDE (Smart Errors)</title>
 <style>
-body {
-  margin:0;
-  font-family:monospace;
-  background:#1e1e1e;
-  color:#ccc;
-  display:flex;
-  flex-direction:column;
-  height:100vh;
-}
-
-#topbar {
-  height:40px;
-  background:#2d2d2d;
-  display:flex;
-  align-items:center;
-  padding:0 10px;
-}
-
-button {
-  background:#3a3a3a;
-  border:none;
-  color:white;
-  padding:6px 12px;
-  cursor:pointer;
-}
-
-#main {
-  display:flex;
-  flex:1;
-}
-
-#editor {
-  width:65%;
-}
-
-#right {
-  width:35%;
-  display:flex;
-  flex-direction:column;
-  background:#1b1b1b;
-}
-
-#outputHeader {
-  padding:8px;
-  background:#2d2d2d;
-}
-
-#output {
-  flex:1;
-  padding:10px;
-  color:#00ff88;
-  white-space:pre-wrap;
-}
-
+body{margin:0;font-family:monospace;background:#1e1e1e;color:#ccc;display:flex;flex-direction:column;height:100vh}
+#topbar{height:40px;background:#2d2d2d;display:flex;align-items:center;padding:0 10px}
+button{background:#3a3a3a;border:none;color:#fff;padding:6px 12px;cursor:pointer}
+#main{display:flex;flex:1}
+#editor{width:65%}
+#right{width:35%;display:flex;flex-direction:column;background:#1b1b1b}
+#outputHeader{padding:8px;background:#2d2d2d}
+#output{flex:1;padding:10px;color:#00ff88;white-space:pre-wrap}
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <button onclick="runCode()">▶ Run</button>
+<button onclick="runCode()">▶ Run</button>
 </div>
 
 <div id="main">
-  <div id="editor"></div>
-
-  <div id="right">
-    <div id="outputHeader">Output</div>
-    <div id="output"></div>
-  </div>
+<div id="editor"></div>
+<div id="right">
+<div id="outputHeader">Output</div>
+<div id="output"></div>
+</div>
 </div>
 
-<!-- Monaco -->
 <script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
-<!-- Nearley -->
 <script src="https://unpkg.com/nearley@2.20.1/lib/nearley.js"></script>
 
 <script>
 let editor;
-
 require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.44.0/min/vs' } });
 require(['vs/editor/editor.main'], function () {
-
   editor = monaco.editor.create(document.getElementById('editor'), {
     value: ">>>[>.]",
     language: 'plaintext',
@@ -94,137 +42,121 @@ require(['vs/editor/editor.main'], function () {
     automaticLayout: true,
     minimap: { enabled: false }
   });
-
 });
 
-
-// ===== PRECOMPILED GRAMMAR =====
+// ===== GRAMMAR =====
 const grammar = {
   Lexer: undefined,
   ParserRules: [
+    {"name":"main","symbols":["statement"],"postprocess":d=>[d[0]]},
+    {"name":"main","symbols":["main","statement"],"postprocess":d=>d[0].concat([d[1]])},
 
-    {"name": "main", "symbols": ["statement"], "postprocess": d => [d[0]]},
-    {"name": "main", "symbols": ["main", "statement"], "postprocess": d => d[0].concat([d[1]])},
+    {"name":"statement","symbols":["loop"],"postprocess":d=>d[0]},
+    {"name":"statement","symbols":["assign"],"postprocess":d=>d[0]},
+    {"name":"statement","symbols":["varPrint"],"postprocess":d=>d[0]},
+    {"name":"statement","symbols":["print"],"postprocess":d=>d[0]},
 
-    {"name": "statement", "symbols": ["loop"], "postprocess": d => d[0]},
-    {"name": "statement", "symbols": ["assign"], "postprocess": d => d[0]},
-    {"name": "statement", "symbols": ["varPrint"], "postprocess": d => d[0]},
-    {"name": "statement", "symbols": ["print"], "postprocess": d => d[0]},
+    {"name":"loop","symbols":["arrows",{"literal":"["},"main",{"literal":"]"}],
+      "postprocess":d=>({type:'loop',count:d[0],body:d[2]})},
 
-    {"name": "loop", "symbols": ["arrows", {"literal":"["}, "main", {"literal":"]"}],
-      "postprocess": d => ({type:'loop', count:d[0], body:d[2]})},
+    {"name":"assign","symbols":["arrows",{"literal":"-=>"},"value"],
+      "postprocess":d=>({type:'assign',varIndex:d[0],value:d[2]})},
 
-    {"name": "assign", "symbols": ["arrows", {"literal":"-=>"}, "value"],
-      "postprocess": d => ({type:'assign', varIndex:d[0], value:d[2]})},
+    {"name":"varPrint","symbols":["arrows",{"literal":"->"}],
+      "postprocess":d=>({type:'varPrint',varIndex:d[0]})},
 
-    {"name": "varPrint", "symbols": ["arrows", {"literal":"->"}],
-      "postprocess": d => ({type:'varPrint', varIndex:d[0]})},
+    {"name":"print","symbols":["arrows","dots"],
+      "postprocess":d=>({type:'print',arrows:d[0],dots:d[1]})},
 
-    {"name": "print", "symbols": ["arrows", "dots"],
-      "postprocess": d => ({type:'print', arrows:d[0], dots:d[1]})},
+    {"name":"arrows","symbols":[{"literal":">"}],"postprocess":()=>1},
+    {"name":"arrows","symbols":[{"literal":">"},"arrows"],"postprocess":d=>d[1]+1},
 
-    {"name": "arrows", "symbols": [{"literal":">"}], "postprocess": () => 1},
-    {"name": "arrows", "symbols": [{"literal":">"}, "arrows"], "postprocess": d => d[1]+1},
+    {"name":"dots","symbols":[{"literal":"."}],"postprocess":()=>1},
+    {"name":"dots","symbols":[{"literal":"."},"dots"],"postprocess":d=>d[1]+1},
 
-    {"name": "dots", "symbols": [{"literal":"."}], "postprocess": () => 1},
-    {"name": "dots", "symbols": [{"literal":"."}, "dots"], "postprocess": d => d[1]+1},
-
-    {"name": "value", "symbols": ["dots"], "postprocess": d => d[0]}
-
+    {"name":"value","symbols":["dots"],"postprocess":d=>d[0]}
   ],
   ParserStart: "main"
 };
 
-
-// ===== EXECUTION ENGINE =====
+// ===== EXECUTION =====
 function execute(ast, vars, out){
-
   for(const node of ast){
-
-    // PRINT
-    if(node.type === 'print'){
-      if(node.dots === 1){
-        out.value += String.fromCharCode(96 + node.arrows); // a,b,c
-      }
-      else if(node.dots === 2){
-        out.value += String.fromCharCode(64 + node.arrows); // A,B,C
-      }
-      else if(node.dots === 3){
-        out.value += String(node.arrows); // numbers
-      }
-      else if(node.dots === 4){
-        out.value += "@"; // simple symbol
-      }
-      else{
-        out.value += "?";
-      }
+    if(node.type==='print'){
+      if(node.dots===1) out.value += String.fromCharCode(96+node.arrows);
+      else if(node.dots===2) out.value += String.fromCharCode(64+node.arrows);
+      else if(node.dots===3) out.value += String(node.arrows);
+      else if(node.dots===4) out.value += "@";
+      else out.value += "?";
     }
-
-    // ASSIGN
-    else if(node.type === 'assign'){
-      vars[node.varIndex] = node.value;
+    else if(node.type==='assign') vars[node.varIndex]=node.value;
+    else if(node.type==='varPrint') out.value += (vars[node.varIndex]||0);
+    else if(node.type==='loop'){
+      for(let i=0;i<node.count;i++) execute(node.body,vars,out);
     }
-
-    // VAR PRINT
-    else if(node.type === 'varPrint'){
-      out.value += (vars[node.varIndex] || 0);
-    }
-
-    // LOOP
-    else if(node.type === 'loop'){
-      for(let i = 0; i < node.count; i++){
-        execute(node.body, vars, out);
-      }
-    }
-
   }
 }
 
+// ===== SMART ERROR SYSTEM =====
+function getSmartError(e, code){
+  let msg = e.message;
 
-// ===== RUN + MONACO ERRORS =====
+  if(code.trim().startsWith("."))
+    return "Code must start with '>' → Try: >. or >>...";
+
+  if(code.includes("[") && !code.includes("]"))
+    return "Missing closing ']' for loop";
+
+  if(code.includes("]") && !code.includes("["))
+    return "Unexpected ']' → remove it or add '[' before";
+
+  if(msg.includes("-=>") && !code.includes("."))
+    return "Variable assignment needs value → example: >-=>...";
+
+  if(msg.includes("->") && !code.includes("-=>"))
+    return "Trying to print variable before assigning it";
+
+  if(msg.includes("Unexpected"))
+    return "Invalid syntax → check arrows (>) and dots (.) pattern";
+
+  return "Syntax error";
+}
+
+// ===== RUN =====
 function runCode(){
-
   const model = editor.getModel();
-  let markers = [];
 
   try{
-
     const input = editor.getValue();
     const parser = new nearley.Parser(nearley.Grammar.fromCompiled(grammar));
-
     parser.feed(input);
 
     const ast = parser.results[0];
 
     let vars = {};
-    let out = { value: "" };
+    let out = {value:""};
 
-    execute(ast, vars, out);
+    execute(ast,vars,out);
 
     document.getElementById("output").textContent = out.value;
-
-    // clear errors
     monaco.editor.setModelMarkers(model, "owner", []);
-
   }
   catch(e){
+    const code = editor.getValue();
+    const message = getSmartError(e, code);
 
-    document.getElementById("output").textContent = "Error: " + e.message;
+    document.getElementById("output").textContent = "Error: " + message;
 
-    // show squiggly line
-    markers = [{
+    monaco.editor.setModelMarkers(model, "owner", [{
       startLineNumber: 1,
       startColumn: 1,
       endLineNumber: 1,
       endColumn: 2,
-      message: e.message,
+      message: message,
       severity: monaco.MarkerSeverity.Error
-    }];
-
-    monaco.editor.setModelMarkers(model, "owner", markers);
+    }]);
   }
 }
-
 </script>
 
 </body>
