@@ -6,6 +6,7 @@ body {
   height:100vh;
   display:flex;
   flex-direction:column;
+  overflow:hidden; /* ❗ disables page scroll */
 }
 
 /* TOP BAR */
@@ -37,19 +38,20 @@ button:hover {
   background:#2ea043;
 }
 
-/* MAIN */
+/* MAIN LAYOUT */
 #main {
   display:flex;
   flex:1;
+  height:100%;
 }
 
-/* EDITOR */
+/* EDITOR SECTION */
 #editorContainer {
   width:65%;
   display:flex;
   background:#0d1117;
   border-right:1px solid #30363d;
-  align-items:stretch;
+  height:100%;
 }
 
 /* LINE NUMBERS */
@@ -59,11 +61,13 @@ button:hover {
   text-align:right;
   color:#6e7681;
   user-select:none;
-  overflow:hidden;
 
   font-family: monospace;
   font-size:14px;
   line-height:1.4;
+
+  overflow:hidden;
+  min-width:40px;
 }
 
 #lineNumbers div {
@@ -85,14 +89,16 @@ button:hover {
   line-height:1.4;
 
   white-space:pre;
-  overflow:auto;
+
+  overflow:auto; /* internal scrolling */
 }
 
-/* OUTPUT */
+/* RIGHT PANEL */
 #right {
   width:35%;
   display:flex;
   flex-direction:column;
+  height:100%;
 }
 
 #outputHeader {
@@ -107,4 +113,39 @@ button:hover {
   color:#3fb950;
   white-space:pre-wrap;
   font-size:14px;
+
+  overflow:auto; /* internal scrolling */
+}
+
+/* ========================= */
+/* CUSTOM SCROLLBAR STYLING  */
+/* ========================= */
+
+/* Chrome / Edge / ChromeOS */
+
+#editor::-webkit-scrollbar,
+#output::-webkit-scrollbar {
+  width: 10px;
+}
+
+#editor::-webkit-scrollbar-track,
+#output::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+#editor::-webkit-scrollbar-thumb,
+#output::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 6px;
+}
+
+#editor::-webkit-scrollbar-thumb:hover,
+#output::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Optional: thinner scrollbar look */
+#editor::-webkit-scrollbar-corner,
+#output::-webkit-scrollbar-corner {
+  background: transparent;
 }
