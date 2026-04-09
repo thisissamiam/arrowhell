@@ -2,243 +2,37 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Custom IDE (Working)</title>
-
-<style>
-body {
-  margin:0;
-  font-family:monospace;
-  background:#1e1e1e;
-  color:#ccc;
-  display:flex;
-  flex-direction:column;
-  height:100vh;
-}
-
-#topbar {
-  height:40px;
-  background:#2d2d2d;
-  display:flex;
-  align-items:center;
-  padding:0 10px;
-}
-
-button {
-  background:#3a3a3a;
-  border:none;
-  color:white;
-  padding:6px 12px;
-  cursor:pointer;
-}
-
-#main {
-  display:flex;
-  flex:1;
-}
-
-#editorContainer {
-  width:65%;
-  display:flex;
-  background:#1e1e1e;
-}
-
-#lineNumbers {
-  background:#2a2a2a;
-  padding:10px 5px;
-  text-align:right;
-  user-select:none;
-  color:#888;
-}
-
-#editor {
-  flex:1;
-  padding:10px;
-  border:none;
-  outline:none;
-  resize:none;
-  background:#1e1e1e;
-  color:#ccc;
-  font-family:monospace;
-  font-size:14px;
-}
-
-#right {
-  width:35%;
-  display:flex;
-  flex-direction:column;
-  background:#1b1b1b;
-}
-
-#outputHeader {
-  padding:8px;
-  background:#2d2d2d;
-}
-
-#output {
-  flex:1;
-  padding:10px;
-  color:#00ff88;
-  white-space:pre-wrap;
-}
-</style>
+<title>Custom IDE</title>
+<link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 <div id="topbar">
-<button onclick="runCode()">▶ Run</button>
+  <div class="logo">⚡ Custom IDE</div>
+  <button onclick="runCode()">▶ Run</button>
 </div>
 
 <div id="main">
-<div id="editorContainer">
-<div id="lineNumbers">1</div>
-<textarea id="editor">>>>[>.]</textarea>
-</div>
 
-<div id="right">
-<div id="outputHeader">Output</div>
-<div id="output"></div>
-</div>
+  <!-- LEFT: EDITOR -->
+  <div id="editorContainer">
+    <div id="lineNumbers"></div>
+    <textarea id="editor"></textarea>
+  </div>
+
+  <!-- RIGHT: OUTPUT -->
+  <div id="right">
+    <div id="outputHeader">Output</div>
+    <div id="output"></div>
+  </div>
+
 </div>
 
 <script src="https://unpkg.com/nearley@2.20.1/lib/nearley.js"></script>
-
-<script>
-const editor = document.getElementById("editor");
-const lineNumbers = document.getElementById("lineNumbers");
-
-// ===== LINE NUMBERS =====
-function updateLines(){
-  const lines = editor.value.split("\n").length;
-  lineNumbers.innerHTML = Array.from({length:lines},(_,i)=>i+1).join("<br>");
-}
-
-editor.addEventListener("input", ()=>{
-  updateLines();
-  validate();
-});
-
-updateLines();
-
-
-// ===== GRAMMAR =====
-const grammar = {
-  Lexer: undefined,
-  ParserRules: [
-    {"name":"main","symbols":["statement"],"postprocess":d=>[d[0]]},
-    {"name":"main","symbols":["main","statement"],"postprocess":d=>d[0].concat([d[1]])},
-
-    {"name":"statement","symbols":["loop"],"postprocess":d=>d[0]},
-    {"name":"statement","symbols":["assign"],"postprocess":d=>d[0]},
-    {"name":"statement","symbols":["varPrint"],"postprocess":d=>d[0]},
-    {"name":"statement","symbols":["print"],"postprocess":d=>d[0]},
-
-    {"name":"loop","symbols":["arrows",{"literal":"["},"main",{"literal":"]"}],
-      "postprocess":d=>({type:'loop',count:d[0],body:d[2]})},
-
-    {"name":"assign","symbols":["arrows",{"literal":"-=>"},"value"],
-      "postprocess":d=>({type:'assign',varIndex:d[0],value:d[2]})},
-
-    {"name":"varPrint","symbols":["arrows",{"literal":"->"}],
-      "postprocess":d=>({type:'varPrint',varIndex:d[0]})},
-
-    {"name":"print","symbols":["arrows","dots"],
-      "postprocess":d=>({type:'print',arrows:d[0],dots:d[1]})},
-
-    {"name":"arrows","symbols":[{"literal":">"}],"postprocess":()=>1},
-    {"name":"arrows","symbols":[{"literal":">"},"arrows"],"postprocess":d=>d[1]+1},
-
-    {"name":"dots","symbols":[{"literal":"."}],"postprocess":()=>1},
-    {"name":"dots","symbols":[{"literal":"."},"dots"],"postprocess":d=>d[1]+1},
-
-    {"name":"value","symbols":["dots"],"postprocess":d=>d[0]}
-  ],
-  ParserStart:"main"
-};
-
-
-// ===== EXECUTION =====
-function execute(ast, vars, out){
-  for(const node of ast){
-    if(node.type==="print"){
-      if(node.dots===1) out.value+=String.fromCharCode(96+node.arrows);
-      else if(node.dots===2) out.value+=String.fromCharCode(64+node.arrows);
-      else if(node.dots===3) out.value+=String(node.arrows);
-      else out.value+="?";
-    }
-    else if(node.type==="assign") vars[node.varIndex]=node.value;
-    else if(node.type==="varPrint") out.value+=(vars[node.varIndex]||0);
-    else if(node.type==="loop"){
-      for(let i=0;i<node.count;i++) execute(node.body,vars,out);
-    }
-  }
-}
-
-
-// ===== ERROR CHECK =====
-function getError(code){
-  let stack = [];
-
-  for(let i=0;i<code.length;i++){
-    if(code[i]==="[") stack.push(i);
-    if(code[i]==="]"){
-      if(stack.length===0){
-        return "Unexpected ] at position " + (i+1);
-      }
-      stack.pop();
-    }
-  }
-
-  if(stack.length>0){
-    return "Missing ] at position " + (stack.pop()+1);
-  }
-
-  if(code.trim().startsWith(".")){
-    return "Must start with '>'";
-  }
-
-  if(code.includes("->") && !code.includes("-=>")){
-    return "Variable not set";
-  }
-
-  return null;
-}
-
-
-// ===== VALIDATE =====
-function validate(){
-  const code = editor.value;
-  const err = getError(code);
-
-  if(err){
-    document.getElementById("output").textContent = "⚠ " + err;
-  } else {
-    document.getElementById("output").textContent = "";
-  }
-}
-
-
-// ===== RUN =====
-function runCode(){
-  const code = editor.value;
-
-  try{
-    const parser = new nearley.Parser(nearley.Grammar.fromCompiled(grammar));
-    parser.feed(code);
-
-    const ast = parser.results[0];
-
-    let vars = {};
-    let out = {value:""};
-
-    execute(ast,vars,out);
-
-    document.getElementById("output").textContent = out.value;
-  }
-  catch(e){
-    document.getElementById("output").textContent = "Error";
-  }
-}
-</script>
+<script src="language.js"></script>
+<script src="editor.js"></script>
+<script src="run.js"></script>
 
 </body>
 </html>
