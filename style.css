@@ -59,13 +59,18 @@ button:hover {
   text-align:right;
   color:#6e7681;
   user-select:none;
-  font-size:14px;
-  line-height:20px;
-  box-sizing: border-box;
   overflow:hidden;
+
+  font-family: monospace;
+  font-size:14px;
+  line-height:1.4;
 }
 
-/* EDITOR TEXTAREA */
+#lineNumbers div {
+  height: calc(1em * 1.4);
+}
+
+/* EDITOR */
 #editor {
   flex:1;
   padding:10px;
@@ -74,13 +79,16 @@ button:hover {
   resize:none;
   background:#0d1117;
   color:#e6edf3;
+
+  font-family: monospace;
   font-size:14px;
-  line-height:20px;
-  box-sizing: border-box;
-  white-space: pre;
+  line-height:1.4;
+
+  white-space:pre;
+  overflow:auto;
 }
 
-/* OUTPUT PANEL */
+/* OUTPUT */
 #right {
   width:35%;
   display:flex;
