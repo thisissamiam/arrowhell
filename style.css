@@ -49,16 +49,23 @@ button:hover {
   display:flex;
   background:#0d1117;
   border-right:1px solid #30363d;
+  align-items:stretch;
 }
 
+/* LINE NUMBERS */
 #lineNumbers {
   background:#161b22;
   padding:10px 8px;
   text-align:right;
   color:#6e7681;
   user-select:none;
+  font-size:14px;
+  line-height:20px;
+  box-sizing: border-box;
+  overflow:hidden;
 }
 
+/* EDITOR TEXTAREA */
 #editor {
   flex:1;
   padding:10px;
@@ -68,10 +75,12 @@ button:hover {
   background:#0d1117;
   color:#e6edf3;
   font-size:14px;
-  line-height:1.4;
+  line-height:20px;
+  box-sizing: border-box;
+  white-space: pre;
 }
 
-/* OUTPUT */
+/* OUTPUT PANEL */
 #right {
   width:35%;
   display:flex;
