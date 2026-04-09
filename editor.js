@@ -1,32 +1,41 @@
-const editor = document.getElementById("editor");
+const editorEl = document.getElementById("editor");
 const lineNumbers = document.getElementById("lineNumbers");
 
-editor.value = ">>>[>.]";
+// expose globally so run.js can use it
+window.editor = editorEl;
+
+editorEl.value = ">>>[>.]";
 
 // line numbers
 function updateLines(){
-  const count = editor.value.split("\n").length;
+  const count = editorEl.value.split("\n").length;
   lineNumbers.innerHTML = Array.from({length:count},(_,i)=>i+1).join("<br>");
 }
 
 // tab support
-editor.addEventListener("keydown", (e)=>{
+editorEl.addEventListener("keydown", (e)=>{
   if(e.key === "Tab"){
     e.preventDefault();
-    const start = editor.selectionStart;
-    editor.value =
-      editor.value.substring(0,start) +
+    const start = editorEl.selectionStart;
+    editorEl.value =
+      editorEl.value.substring(0,start) +
       "  " +
-      editor.value.substring(editor.selectionEnd);
-    editor.selectionStart = editor.selectionEnd = start + 2;
+      editorEl.value.substring(editorEl.selectionEnd);
+    editorEl.selectionStart = editorEl.selectionEnd = start + 2;
+  }
+
+  // 🚀 CTRL + ENTER TO RUN
+  if(e.key === "Enter" && e.ctrlKey){
+    e.preventDefault();
+    runCode();
   }
 });
 
-// sync scroll
-editor.addEventListener("scroll", ()=>{
-  lineNumbers.scrollTop = editor.scrollTop;
+// scroll sync
+editorEl.addEventListener("scroll", ()=>{
+  lineNumbers.scrollTop = editorEl.scrollTop;
 });
 
-editor.addEventListener("input", updateLines);
+editorEl.addEventListener("input", updateLines);
 
 updateLines();
