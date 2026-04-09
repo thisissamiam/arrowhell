@@ -9,21 +9,26 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function updateLines(){
     const lines = editorEl.value.split("\n").length;
+
     let html = "";
     for(let i = 1; i <= Math.min(lines, 50000); i++){
-      html += i + "<br>";
+      html += `<div>${i}</div>`;
     }
+
     lineNumbers.innerHTML = html;
   }
 
   editorEl.addEventListener("keydown", (e) => {
+
     if(e.key === "Tab"){
       e.preventDefault();
+
       const start = editorEl.selectionStart;
       editorEl.value =
         editorEl.value.substring(0, start) +
         "  " +
         editorEl.value.substring(editorEl.selectionEnd);
+
       editorEl.selectionStart = editorEl.selectionEnd = start + 2;
     }
 
