@@ -20,6 +20,10 @@ function runCode(){
   try{
     const parser = new nearley.Parser(nearley.Grammar.fromCompiled(window.grammar));
     parser.feed(code);
+    
+    if(parser.results.length === 0){
+      throw new Error("Parse failed");
+    }
 
     const ast = parser.results[0];
 
