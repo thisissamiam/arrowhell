@@ -4,6 +4,7 @@ function runCode(){
     const result = interpret(code);
     document.getElementById("output").textContent = result;
   } catch(e){
+    console.error("Run error:", e);
     document.getElementById("output").textContent = "Error: " + e.message;
   }
 }
@@ -15,7 +16,7 @@ function interpret(code){
 
   function readArrows(){
     let count = 0;
-    while(code[i] === ">"){
+    while(i < code.length && code[i] === ">"){
       count++;
       i++;
     }
@@ -24,7 +25,7 @@ function interpret(code){
 
   function readDots(){
     let count = 0;
-    while(code[i] === "."){
+    while(i < code.length && code[i] === "."){
       count++;
       i++;
     }
@@ -46,7 +47,7 @@ function interpret(code){
         let arrows = readArrows();
 
         // LOOP
-        if(code[i] === "["){
+        if(i < code.length && code[i] === "["){
           i++; // skip [
           let bodyStart = i;
 
@@ -66,7 +67,7 @@ function interpret(code){
         }
 
         // PRINT
-        else if(code[i] === "."){
+        else if(i < code.length && code[i] === "."){
           let dots = readDots();
 
           if(dots === 1) result += String.fromCharCode(96 + arrows);
@@ -75,12 +76,14 @@ function interpret(code){
           else result += "?";
         }
 
-        // VAR PRINT / ASSIGN placeholders (optional)
-        else if(code[i] === "-" && code[i+1] === ">"){
+        // VAR PRINT
+        else if(i + 1 < code.length && code[i] === "-" && code[i+1] === ">"){
           i += 2;
           result += (vars[arrows] || 0);
         }
-        else if(code[i] === "-" && code[i+1] === "=" && code[i+2] === ">"){
+        
+        // ASSIGN
+        else if(i + 2 < code.length && code[i] === "-" && code[i+1] === "=" && code[i+2] === ">"){
           i += 3;
           let value = readDots();
           vars[arrows] = value;
