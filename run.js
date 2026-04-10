@@ -29,8 +29,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
       worker = new Worker('worker.js');
 
-      worker.onmessage = function(e){
-        const data = e.data;
+      else if (data.type === 'output') {
+        outputEl.textContent += data.data;
+      }
         if (!data) return;
 
         if (data.type === 'result') {
