@@ -19,9 +19,9 @@ self.onmessage = async function(e){
     }
 
     const code = typeof data === 'string' ? data : String(data || "");
-    const result = await interpret(code);
+    await interpret(code);
 
-    self.postMessage({ type: 'result', result });
+    self.postMessage({ type: 'done' });
 
   } catch (err) {
     const msg = err?.message || String(err);
@@ -36,33 +36,27 @@ function requestInput(promptText) {
   return p;
 }
 
-// 🔥 NEW: dynamic wait parser
+// 🔥 dynamic wait parser
 function parseWait(code, startIdx) {
-  let idx = startIdx + 1; // skip '#'
+  let idx = startIdx + 1;
   let multiplier = 1;
   let arrows = 0;
 
   while (idx < code.length) {
     const ch = code[idx];
 
-    if (ch === "+") {
-      multiplier *= 10;
-    } else if (ch === "-") {
-      multiplier *= 0.1;
-    } else if (ch === ">") {
-      arrows++;
-    } else {
-      break;
-    }
+    if (ch === "+") multiplier *= 10;
+    else if (ch === "-") multiplier *= 0.1;
+    else if (ch === ">") arrows++;
+    else break;
 
     idx++;
   }
 
   if (arrows === 0) return null;
 
-  const seconds = arrows * multiplier;
   return {
-    time: seconds * 1000,
+    time: arrows * multiplier * 1000,
     length: idx - startIdx
   };
 }
@@ -78,15 +72,13 @@ async function interpret(code) {
   ];
 
   async function runBlock(codeSlice, baseOffset){
-    const parts = [];
     let idx = 0;
 
     while (idx < codeSlice.length) {
 
-      // 🔥 DYNAMIC WAIT SYSTEM
+      // 🔥 WAIT
       if (codeSlice[idx] === "#") {
         const wait = parseWait(codeSlice, idx);
-
         if (wait) {
           await sleep(wait.time);
           idx += wait.length;
@@ -108,7 +100,7 @@ async function interpret(code) {
           idx++;
         }
 
-        // LOOP (fixed real-time execution)
+        // LOOP (REAL-TIME)
         if (idx < codeSlice.length && codeSlice[idx] === "[") {
           idx++;
           const bodyStart = idx;
@@ -124,12 +116,11 @@ async function interpret(code) {
           const body = codeSlice.substring(bodyStart, bodyEnd);
 
           for (let j = 0; j < arrows; j++) {
-            const sub = await runBlock(body, baseOffset + bodyStart);
-            for (const part of sub) parts.push(part);
+            await runBlock(body, baseOffset + bodyStart);
           }
         }
 
-        // PRINT
+        // PRINT (STREAMED)
         else if (idx < codeSlice.length && codeSlice[idx] === ".") {
           let dots = 0;
           while (idx < codeSlice.length && codeSlice[idx] === ".") {
@@ -137,19 +128,22 @@ async function interpret(code) {
             idx++;
           }
 
-          if (dots === 1) parts.push(String.fromCharCode(96 + arrows));
-          else if (dots === 2) parts.push(String.fromCharCode(64 + arrows));
-          else if (dots === 3) parts.push(String(arrows));
+          let out = "";
+
+          if (dots === 1) out = String.fromCharCode(96 + arrows);
+          else if (dots === 2) out = String.fromCharCode(64 + arrows);
+          else if (dots === 3) out = String(arrows);
           else if (dots === 4) {
-            const sym = symbols[(arrows - 1) % symbols.length];
-            parts.push(sym);
-          }
-          else {
+            out = symbols[(arrows - 1) % symbols.length];
+          } else {
             throw new Error(`Too many dots at index ${baseOffset}`);
           }
+
+          // 🔥 STREAM OUTPUT
+          self.postMessage({ type: "output", data: out });
         }
 
-        // VAR PRINT
+        // VAR PRINT (STREAMED)
         else if (
           idx + 1 < codeSlice.length &&
           codeSlice[idx] === "-" &&
@@ -157,7 +151,7 @@ async function interpret(code) {
         ) {
           idx += 2;
           const v = vars.has(arrows) ? vars.get(arrows) : 0;
-          parts.push(String(v));
+          self.postMessage({ type: "output", data: String(v) });
         }
 
         else {
@@ -167,10 +161,7 @@ async function interpret(code) {
         idx++;
       }
     }
-
-    return parts;
   }
 
-  const outParts = await runBlock(code, 0);
-  return outParts.join("");
+  await runBlock(code, 0);
 }
