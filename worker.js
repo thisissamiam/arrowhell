@@ -5,11 +5,11 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-self.onmessage = async function(e){
+self.onmessage = async function (e) {
   try {
     const data = e.data;
 
-    if (data && data.type === 'input-response') {
+    if (data && data.type === "input-response") {
       const resolver = pendingInputs.get(data.id);
       if (resolver) {
         resolver(data.value);
@@ -18,25 +18,29 @@ self.onmessage = async function(e){
       return;
     }
 
-    const code = typeof data === 'string' ? data : String(data || "");
+    const code = typeof data === "string" ? data : String(data || "");
     await interpret(code);
 
-    self.postMessage({ type: 'done' });
+    self.postMessage({ type: "done" });
 
   } catch (err) {
-    const msg = err?.message || String(err);
-    self.postMessage({ type: 'error', message: msg });
+    self.postMessage({
+      type: "error",
+      message: err?.message || String(err)
+    });
   }
 };
 
 function requestInput(promptText) {
   const id = ++inputCounter;
   const p = new Promise(resolve => pendingInputs.set(id, resolve));
-  self.postMessage({ type: 'input-request', id, prompt: promptText || "" });
+  self.postMessage({ type: "input-request", id, prompt: promptText || "" });
   return p;
 }
 
-// 🔥 dynamic wait parser
+//
+// 🔥 FIXED WAIT PARSER (THIS WAS YOUR BUG)
+//
 function parseWait(code, startIdx) {
   let idx = startIdx + 1;
   let multiplier = 1;
@@ -44,6 +48,9 @@ function parseWait(code, startIdx) {
 
   while (idx < code.length) {
     const ch = code[idx];
+
+    // 🚨 STOP WAIT PARSING ON SPACE / NEWLINE
+    if (/\s/.test(ch)) break;
 
     if (ch === "+") multiplier *= 10;
     else if (ch === "-") multiplier *= 0.1;
@@ -61,7 +68,9 @@ function parseWait(code, startIdx) {
   };
 }
 
-// --- interpreter ---
+//
+// 🚀 INTERPRETER
+//
 async function interpret(code) {
   const vars = new Map();
 
@@ -71,14 +80,17 @@ async function interpret(code) {
     "'", "\"", ",", "<", ">", ".", "/", "?", "\\", "|", "`", "~"
   ];
 
-  async function runBlock(codeSlice, baseOffset){
+  async function runBlock(codeSlice, baseOffset) {
     let idx = 0;
 
     while (idx < codeSlice.length) {
 
-      // 🔥 WAIT
+      //
+      // 🔥 WAIT SYSTEM
+      //
       if (codeSlice[idx] === "#") {
         const wait = parseWait(codeSlice, idx);
+
         if (wait) {
           await sleep(wait.time);
           idx += wait.length;
@@ -95,14 +107,18 @@ async function interpret(code) {
 
       if (ch === ">") {
         let arrows = 0;
+
         while (idx < codeSlice.length && codeSlice[idx] === ">") {
           arrows++;
           idx++;
         }
 
-        // LOOP (REAL-TIME)
-        if (idx < codeSlice.length && codeSlice[idx] === "[") {
+        //
+        // 🔁 LOOP (REAL TIME)
+        //
+        if (codeSlice[idx] === "[") {
           idx++;
+
           const bodyStart = idx;
           let depth = 1;
 
@@ -115,14 +131,17 @@ async function interpret(code) {
           const bodyEnd = idx - 1;
           const body = codeSlice.substring(bodyStart, bodyEnd);
 
-          for (let j = 0; j < arrows; j++) {
+          for (let i = 0; i < arrows; i++) {
             await runBlock(body, baseOffset + bodyStart);
           }
         }
 
-        // PRINT (STREAMED)
-        else if (idx < codeSlice.length && codeSlice[idx] === ".") {
+        //
+        // 🖨 PRINT (STREAMED)
+        //
+        else if (codeSlice[idx] === ".") {
           let dots = 0;
+
           while (idx < codeSlice.length && codeSlice[idx] === ".") {
             dots++;
             idx++;
@@ -136,27 +155,33 @@ async function interpret(code) {
           else if (dots === 4) {
             out = symbols[(arrows - 1) % symbols.length];
           } else {
-            throw new Error(`Too many dots at index ${baseOffset}`);
+            throw new Error(`Too many dots at ${baseOffset}`);
           }
 
-          // 🔥 STREAM OUTPUT
           self.postMessage({ type: "output", data: out });
         }
 
-        // VAR PRINT (STREAMED)
+        //
+        // 📦 VAR PRINT
+        //
         else if (
-          idx + 1 < codeSlice.length &&
           codeSlice[idx] === "-" &&
           codeSlice[idx + 1] === ">"
         ) {
           idx += 2;
+
           const v = vars.has(arrows) ? vars.get(arrows) : 0;
-          self.postMessage({ type: "output", data: String(v) });
+
+          self.postMessage({
+            type: "output",
+            data: String(v)
+          });
         }
 
         else {
           idx++;
         }
+
       } else {
         idx++;
       }
